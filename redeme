@@ -1,0 +1,12 @@
+// Inicial
+function init() {
+  loadState(); 
+  $initial.value = (state.initialBank || 0).toFixed(2); 
+  createCharts();        // inicializa gráficos
+  updateRealtime();      // atualiza valores em tempo real
+  updateKellyInteligente(); // atualiza Kelly Inteligente
+  recalc();              // recalcula tabela, resumo e gráficos
+}
+
+init();
+recalc();

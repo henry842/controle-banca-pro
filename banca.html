@@ -1,0 +1,470 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<title>Controle de Banca — Profissional</title>
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+:root{
+  --bg:#f6f8fb; --card:#fff; --muted:#64748b; --accent:#0ea5a4; --danger:#ef4444;
+}
+*{box-sizing:border-box}
+body{font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,Arial; background:var(--bg); color:#0f172a; margin:0; padding:18px;}
+.wrap{max-width:1100px; margin:0 auto;}
+.card{background:var(--card); border-radius:12px; box-shadow:0 6px 20px rgba(12,20,40,0.06); padding:16px; margin-bottom:14px;}
+header{display:flex;justify-content:space-between;align-items:center;gap:12px}
+h1{font-size:18px;margin:0}
+.small{font-size:13px;color:var(--muted)}
+label{display:block;font-size:13px;margin-bottom:6px;color:#334155}
+input[type="number"], input[type="text"], select{width:100%; padding:8px 10px; border-radius:8px; border:1px solid #e6e9ef; font-size:14px}
+.grid{display:grid; gap:10px; grid-template-columns: repeat(4,1fr); }
+.controls{display:flex;gap:8px; margin-top:8px}
+button{background:var(--accent); color:white; border:none; padding:8px 12px; border-radius:8px; cursor:pointer}
+button.secondary{background:#64748b}
+button.danger{background:var(--danger)}
+table{width:100%; border-collapse:collapse; margin-top:12px; font-size:14px}
+th,td{padding:8px; border-bottom:1px solid #eef2f7; text-align:left}
+th.right,td.right{text-align:right}
+.summary{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+.pill{background:#f1f5f9;padding:10px 12px;border-radius:10px;min-width:150px}
+.pill strong{display:block;font-size:18px}
+.actions{display:flex;gap:8px;align-items:center}
+@media (max-width:880px){ .grid{grid-template-columns: repeat(2,1fr);} }
+@media (max-width:520px){
+  .grid{grid-template-columns:1fr;}
+  header{flex-direction:column;align-items:flex-start;gap:6px}
+  .summary{flex-direction:column}
+}
+.muted{color:var(--muted); font-size:13px}
+.small-btn{padding:6px 8px; border-radius:8px; border:none; cursor:pointer}
+.row-actions{display:flex;gap:6px;justify-content:flex-end}
+.file-input{display:none}
+.stat-list{display:flex;gap:8px;flex-wrap:wrap}
+.tooltip{position:relative;display:inline-block;cursor:pointer}
+.tooltip .tooltiptext{visibility:hidden;width:180px;background:#334155;color:#fff;text-align:left;padding:6px;border-radius:6px;position:absolute;z-index:1;bottom:125%;left:50%;margin-left:-90px;opacity:0;transition:opacity 0.3s;}
+.tooltip:hover .tooltiptext{visibility:visible;opacity:1;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- CABEÇALHO -->
+<div class="card">
+<header>
+<div>
+<h1>Controle de Banca — Profissional</h1>
+<div class="small">Salva automaticamente. Categorias, notas, cálculo automático, gráficos e Kelly integrados.</div>
+</div>
+<div class="actions">
+<button id="exportCsv">Exportar CSV</button>
+<button id="exportJson">Exportar JSON</button>
+<label class="small-btn" style="background:#94a3b8;border-radius:8px;padding:8px 10px;">
+Importar JSON
+<input id="importJson" class="file-input" type="file" accept="application/json">
+</label>
+<button id="reset" class="secondary">Resetar</button>
+</div>
+</header>
+
+<!-- CONFIGURAÇÕES DE BANCA -->
+<div style="margin-top:12px;">
+<label>Banca inicial (R$)</label>
+<input id="initialBank" type="number" min="0" step="0.01" value="100.00">
+</div>
+
+<!-- FORMULÁRIO DE APOSTA -->
+<div style="margin-top:12px;">
+<div class="grid">
+<div>
+<label>Valor da aposta (R$)</label>
+<input id="stake" type="number" min="0" step="0.01" value="10.00">
+</div>
+<div>
+<label>Odd (cotação)</label>
+<input id="odd" type="number" min="1" step="0.01" value="2.00">
+</div>
+<div>
+<label>Resultado</label>
+<select id="result">
+<option value="win">Ganho</option>
+<option value="loss">Perda</option>
+</select>
+</div>
+<div>
+<label>Categoria</label>
+<select id="category">
+<option value="Futebol">Futebol</option>
+<option value="Basquete">Basquete</option>
+<option value="Múltipla">Múltipla</option>
+<option value="Outros">Outros</option>
+</select>
+</div>
+<div>
+<label>Observações</label>
+<input id="notes" type="text" placeholder="Anotações opcionais">
+</div>
+<div>
+<label>Probabilidade real (%)</label>
+<input id="realProb" type="number" min="0" max="100" step="0.1" placeholder="Ex: 60">
+<div id="kellyMsg" class="small muted">Half Kelly sugerirá o stake aqui</div>
+</div>
+<div>
+<label>Retorno (R$)</label>
+<input id="payout" type="number" min="0" step="0.01" value="0.00" disabled>
+</div>
+</div>
+
+<div class="controls">
+<button id="addBet">Adicionar Aposta</button>
+<button id="undo" class="secondary">Desfazer última</button>
+<button id="cancelEdit" class="secondary" style="display:none">Cancelar edição</button>
+</div>
+</div>
+</div>
+
+<!-- HISTÓRICO DE APOSTAS -->
+<div class="card" aria-live="polite">
+<div style="display:flex;justify-content:space-between;align-items:center;gap:12px">
+<div>
+<strong>Histórico de Apostas</strong>
+<div class="muted">Edite, exclua ou filtre por categoria.</div>
+</div>
+<select id="filterCategory">
+<option value="">Todos</option>
+<option value="Futebol">Futebol</option>
+<option value="Basquete">Basquete</option>
+<option value="Múltipla">Múltipla</option>
+<option value="Outros">Outros</option>
+</select>
+</div>
+
+<table id="betsTable">
+<thead>
+<tr>
+<th>#</th>
+<th>Data / Hora</th>
+<th>Stake</th>
+<th>Odd</th>
+<th>Resultado</th>
+<th>Categoria</th>
+<th>Retorno</th>
+<th>Net</th>
+<th class="right">Banca após</th>
+<th>Observações</th>
+<th>Ações</th>
+</tr>
+</thead>
+<tbody></tbody>
+</table>
+</div>
+
+<!-- RESUMO DA BANCA -->
+<div class="card summary">
+<div class="pill"><div class="small">Banca atual</div><strong id="bankNow">R$ 0,00</strong></div>
+<div class="pill"><div class="small">Lucro / Prejuízo (R$)</div><strong id="profit">R$ 0,00</strong></div>
+<div class="pill"><div class="small">Porcentagem vs banca inicial</div><strong id="profitPct">0.00%</strong></div>
+<div class="pill"><div class="small">Apostas totais</div><strong id="numBets">0</strong></div>
+</div>
+
+<!-- ESTATÍSTICAS -->
+<div class="card stat-list">
+<div class="pill"><div class="small">Acertou</div><strong id="wins">0</strong></div>
+<div class="pill"><div class="small">Errou</div><strong id="losses">0</strong></div>
+<div class="pill"><div class="small">% Acerto</div><strong id="winPct">0.00%</strong></div>
+<div class="pill"><div class="small">Total apostado</div><strong id="totalStake">R$ 0,00</strong></div>
+<div class="pill"><div class="small">ROI</div><strong id="roi">0.00%</strong></div>
+<div class="pill"><div class="small">Média odd</div><strong id="avgOdd">0.00</strong></div>
+<div class="pill"><div class="small">Lucro médio / aposta</div><strong id="avgProfit">R$ 0,00</strong></div>
+</div>
+
+<!-- GRÁFICOS -->
+<div class="card">
+<h3 style="margin:0 0 8px 0">Gráficos</h3>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+<div style="background:#fff;padding:8px;border-radius:8px">
+<div class="small">Evolução da banca (R$)</div>
+<canvas id="chartBank" height="160"></canvas>
+</div>
+<div style="background:#fff;padding:8px;border-radius:8px">
+<div class="small">Lucro acumulado (%)</div>
+<canvas id="chartPct" height="160"></canvas>
+</div>
+</div>
+</div>
+
+<script>
+const STORAGE_KEY='banca_tracker_v4';
+let state={initialBank:100,bets:[]};
+let editIndex=-1;
+
+// ELEMENTOS
+const $initial=document.getElementById('initialBank');
+const $stake=document.getElementById('stake');
+const $odd=document.getElementById('odd');
+const $result=document.getElementById('result');
+const $category=document.getElementById('category');
+const $notes=document.getElementById('notes');
+const $realProb=document.getElementById('realProb');
+const $payout=document.getElementById('payout');
+const $kellyMsg=document.getElementById('kellyMsg');
+const $add=document.getElementById('addBet');
+const $undo=document.getElementById('undo');
+const $cancelEdit=document.getElementById('cancelEdit');
+const $betsBody=document.querySelector('#betsTable tbody');
+const $bankNow=document.getElementById('bankNow');
+const $profit=document.getElementById('profit');
+const $profitPct=document.getElementById('profitPct');
+const $numBets=document.getElementById('numBets');
+const $wins=document.getElementById('wins');
+const $losses=document.getElementById('losses');
+const $winPct=document.getElementById('winPct');
+const $totalStake=document.getElementById('totalStake');
+const $roi=document.getElementById('roi');
+const $avgOdd=document.getElementById('avgOdd');
+const $avgProfit=document.getElementById('avgProfit');
+const $exportCsv=document.getElementById('exportCsv');
+const $exportJson=document.getElementById('exportJson');
+const $importJson=document.getElementById('importJson');
+const $reset=document.getElementById('reset');
+const $filterCategory=document.getElementById('filterCategory');
+
+let chartBank=null,chartPct=null;
+function createCharts(){
+  const ctx1=document.getElementById('chartBank').getContext('2d');
+  const ctx2=document.getElementById('chartPct').getContext('2d');
+  chartBank=new Chart(ctx1,{type:'line',data:{labels:[],datasets:[{label:'Banca',data:[],tension:0.25,fill:false}]},options:{plugins:{legend:{display:false}},scales:{x:{display:false}}}});
+  chartPct=new Chart(ctx2,{type:'line',data:{labels:[],datasets:[{label:'% vs inicial',data:[],tension:0.25,fill:false}]},options:{plugins:{legend:{display:false}},scales:{x:{display:false}}}});
+}
+
+// ARMAZENAMENTO
+function saveState(){localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}
+function loadState(){
+  const raw=localStorage.getItem(STORAGE_KEY);
+  if(raw){try{state=JSON.parse(raw);}catch(e){console.error(e);}}
+  state.initialBank=Number(state.initialBank)||0;
+  state.bets=Array.isArray(state.bets)?state.bets:[];
+}
+
+// FORMATOS
+function formatMoney(v){return (Number(v)||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});}
+function formatPct(v){return (Number(v)||0).toFixed(2)+'%';}
+
+// HALF KELLY
+function halfKellyStake(probPercent, odd, bank){
+  const p = probPercent/100;
+  const b = odd-1;
+  let f = (b*p - (1-p))/b;
+  if(f>1) f=1;
+  if(f<0) f=0;
+  f/=2; // half Kelly
+  return f*bank;
+}
+
+function updateKellyMessage(){
+  const prob = parseFloat($realProb.value)||0;
+  const odd = parseFloat($odd.value)||1;
+  if(prob>0 && odd>1){
+    const stake = halfKellyStake(prob, odd, state.bankNow);
+    $kellyMsg.textContent = `Half Kelly sugere apostar R$ ${stake.toFixed(2)} (~${((stake/state.bankNow)*100).toFixed(2)}% da banca)`;
+  } else {
+    $kellyMsg.textContent = 'Half Kelly sugerirá o stake aqui';
+  }
+}
+
+[$realProb,$odd].forEach(el=>el.addEventListener('input',updateKellyMessage));
+
+// RECÁLCULO
+function recalc(){
+  state.initialBank=Number($initial.value)||0;
+  let current=state.initialBank;
+  state.bets.forEach(b=>{
+    b.stake=Number(b.stake)||0;
+    b.odd=Number(b.odd)||1;
+    b.result=b.result||'loss';
+    b.payout=b.result==='win'?b.stake*b.odd:0;
+    b.net=b.result==='win'?b.payout-b.stake:-b.stake;
+    current+=b.net;
+    b.after=current;
+  });
+  state.bankNow=current;
+  const profit=state.bankNow-state.initialBank;
+  const pct=state.initialBank?profit/state.initialBank*100:0;
+  const wins=state.bets.filter(b=>b.result==='win').length;
+  const losses=state.bets.filter(b=>b.result==='loss').length;
+  const totalStake=state.bets.reduce((s,b)=>s+b.stake,0);
+  const avgOdd=state.bets.length?state.bets.reduce((s,b)=>s+b.odd,0)/state.bets.length:0;
+  const roi=totalStake?profit/totalStake*100:0;
+  const avgProfit=state.bets.length?state.bets.reduce((s,b)=>s+b.net,0)/state.bets.length:0;
+
+  $bankNow.textContent=formatMoney(state.bankNow);
+  $profit.textContent=formatMoney(profit);
+  $profitPct.textContent=formatPct(pct);
+  $numBets.textContent=state.bets.length;
+  $wins.textContent=wins;
+  $losses.textContent=losses;
+  $winPct.textContent=formatPct(state.bets.length?wins/state.bets.length*100:0);
+  $totalStake.textContent=formatMoney(totalStake);
+  $roi.textContent=formatPct(roi);
+  $avgOdd.textContent=avgOdd.toFixed(2);
+  $avgProfit.textContent=formatMoney(avgProfit);
+  renderTable();
+  updateCharts();
+  saveState();
+  updateKellyMessage();
+}
+
+// RENDERIZAÇÃO DA TABELA
+function renderTable(){
+  $betsBody.innerHTML='';
+  state.bets.forEach((b,i)=>{
+    if($filterCategory.value && b.category!==$filterCategory.value) return;
+    const tr=document.createElement('tr');
+    tr.innerHTML=`
+      <td>${i+1}</td>
+      <td>${b.time}</td>
+      <td>${formatMoney(b.stake)}</td>
+      <td>${b.odd.toFixed(2)}</td>
+      <td>${b.result==='win'?'Ganho':'Perda'}</td>
+      <td>${b.category}</td>
+      <td>${formatMoney(b.payout)}</td>
+      <td>${formatMoney(b.net)}</td>
+      <td class="right">${formatMoney(b.after)}</td>
+      <td>${b.notes||''}</td>
+      <td class="right">
+        <button class="small-btn" data-edit="${i}" title="Editar">✏️</button>
+        <button class="small-btn" data-delete="${i}" title="Apagar" style="background:#ef4444;color:#fff;border-radius:6px;padding:6px 8px">🗑️</button>
+      </td>`;
+    $betsBody.appendChild(tr);
+  });
+
+  $betsBody.querySelectorAll('[data-delete]').forEach(btn=>{
+    btn.addEventListener('click',e=>{
+      const idx=Number(e.currentTarget.dataset.delete);
+      if(confirm('Apagar esta aposta?')){state.bets.splice(idx,1);recalc();}
+    });
+  });
+
+  $betsBody.querySelectorAll('[data-edit]').forEach(btn=>{
+    btn.addEventListener('click',e=>{
+      const idx=Number(e.currentTarget.dataset.edit);
+      startEdit(idx);
+    });
+  });
+}
+
+// START EDIT
+function startEdit(idx){
+  const b=state.bets[idx];
+  if(!b) return;
+  editIndex=idx;
+  $stake.value=b.stake.toFixed(2);
+  $odd.value=b.odd.toFixed(2);
+  $result.value=b.result;
+  $category.value=b.category;
+  $notes.value=b.notes;
+  $realProb.value=''; 
+  $payout.value=(b.result==='win'?b.stake*b.odd:0).toFixed(2);
+  $add.textContent='Salvar alteração';
+  $cancelEdit.style.display='inline-block';
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+// ADD BET
+function addBetFromInputs(){
+  let stake=parseFloat($stake.value)||0;
+  const odd=parseFloat($odd.value)||1;
+  const result=$result.value;
+  const category=$category.value;
+  const notes=$notes.value;
+  const prob=parseFloat($realProb.value)||0;
+
+  if(prob>0){
+    stake = halfKellyStake(prob, odd, state.bankNow);
+    $stake.value=stake.toFixed(2);
+  }
+
+  const payout=result==='win'?stake*odd:0;
+  const net=result==='win'?payout-stake:-stake;
+  const now=new Date();
+  const timeStr=now.toLocaleString('pt-BR');
+  const bet={stake:+stake,odd:+odd,result,category,notes,time:timeStr,payout:+payout,net:+net,after:0};
+
+  if(editIndex>=0){
+    state.bets[editIndex]=bet;
+    editIndex=-1;
+    $add.textContent='Adicionar Aposta';
+    $cancelEdit.style.display='none';
+  }else{
+    state.bets.push(bet);
+  }
+  recalc();
+}
+
+// UPDATE CHARTS
+function updateCharts(){
+  if(!chartBank||!chartPct) return;
+  const bankData=[state.initialBank]; const pctData=[0];
+  state.bets.forEach(b=>{
+    bankData.push(b.after);
+    const pct=state.initialBank?((b.after-state.initialBank)/state.initialBank*100):0;
+    pctData.push(+pct.toFixed(4));
+  });
+  const labelSeq=Array.from({length:bankData.length},(_,i)=>i);
+  chartBank.data.labels=labelSeq; chartBank.data.datasets[0].data=bankData; chartBank.update();
+  chartPct.data.labels=labelSeq; chartPct.data.datasets[0].data=pctData; chartPct.update();
+}
+
+// EVENTOS
+$add.addEventListener('click',()=>{addBetFromInputs();});
+$undo.addEventListener('click',()=>{if(state.bets.length===0) return; state.bets.pop(); recalc();});
+$cancelEdit.addEventListener('click',()=>{
+  editIndex=-1; $add.textContent='Adicionar Aposta'; $cancelEdit.style.display='none';
+  $stake.value='10.00'; $odd.value='2.00'; $result.value='win'; $category.value='Futebol'; $notes.value=''; $realProb.value='';
+});
+$initial.addEventListener('input',recalc);
+[$stake,$odd,$result,$realProb].forEach(el=>el.addEventListener('input',()=>{$payout.value=($result.value==='win'?($stake.value*$odd.value):0).toFixed(2); updateKellyMessage();}));
+$filterCategory.addEventListener('change',renderTable);
+
+// EXPORT / IMPORT
+$exportCsv.addEventListener('click',()=>{
+  if(!state.bets.length) return alert('Nenhuma aposta para exportar.');
+  const header=['#','data_hora','stake','odd','resultado','categoria','payout','net','banca_apos','notas'];
+  const rows=state.bets.map((b,i)=>[i+1,b.time,b.stake.toFixed(2),b.odd.toFixed(2),b.result,b.category,b.payout.toFixed(2),b.net.toFixed(2),b.after.toFixed(2),b.notes||'']);
+  const csv=[header,...rows].map(r=>r.join(',')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}); const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download='historico_apostas.csv'; a.click(); URL.revokeObjectURL(url);
+});
+
+$exportJson.addEventListener('click',()=>{
+  const data=JSON.stringify(state,null,2);
+  const blob=new Blob([data],{type:'application/json'}); const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download='banca_backup.json'; a.click(); URL.revokeObjectURL(url);
+});
+
+$importJson.addEventListener('change',(e)=>{
+  const f=e.target.files[0];
+  if(!f) return;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    try{
+      const parsed=JSON.parse(ev.target.result);
+      if(!parsed||typeof parsed!=='object') throw new Error('Formato inválido');
+      if(!Array.isArray(parsed.bets)) parsed.bets=[];
+      state=parsed;
+      state.initialBank=Number(state.initialBank)||0;
+      state.bets=state.bets.map(b=>({stake:Number(b.stake)||0,odd:Number(b.odd)||1,result:b.result||'loss',category:b.category||'Outros',notes:b.notes||'',payout:Number(b.payout)||0,net:Number(b.net)||0,time:b.time||new Date().toLocaleString('pt-BR'),after:Number(b.after)||0}));
+      recalc(); alert('Importação concluída.');
+    }catch(err){alert('Erro ao importar JSON: '+err.message);}finally{e.target.value='';}
+  };
+  reader.readAsText(f);
+});
+
+$reset.addEventListener('click',()=>{if(!confirm('Resetar banca e histórico?')) return; state={initialBank:0,bets:[]}; $initial.value='0.00'; saveState(); recalc();});
+
+// INICIALIZAÇÃO
+function init(){loadState(); $initial.value=(state.initialBank||0).toFixed(2); createCharts(); recalc();}
+init();
+</script>
+</body>
+</html>
